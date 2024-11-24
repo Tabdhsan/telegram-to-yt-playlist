@@ -32,7 +32,6 @@ wheels/
 *.egg
 *.ruff*
 
-
 # IDE
 .idea/
 .vscode/
@@ -41,3 +40,14 @@ wheels/
 
 # Logs
 *.log
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+terraform.tfvars
+
+# Deployment
+package/
+lambda_deployment.zip

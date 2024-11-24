@@ -1,4 +1,4 @@
-# Telegram to YouTube Playlist
+# Telegram to YouTube Playlist Bot
 
 Automatically save YouTube links from Telegram chats to a YouTube playlist.
 
@@ -6,9 +6,19 @@ Automatically save YouTube links from Telegram chats to a YouTube playlist.
 
 -   Monitors specified Telegram chats/channels for YouTube links
 -   Automatically adds found videos to a designated YouTube playlist
--   Supports both group chats and channels
--   Can be deployed locally or as AWS Lambda function
--   Handles duplicate videos and various error cases
+-   Prevents duplicate video additions
+-   Cleans up processed messages
+-   Reports errors directly to Telegram chat
+-   Runs on AWS Lambda with hourly checks
+
+## Prerequisites
+
+-   Python 3.9+
+-   AWS Account
+-   Terraform installed
+-   Git Bash (for Windows)
+-   Telegram API credentials
+-   YouTube API credentials
 
 ## Installation
 
@@ -25,7 +35,7 @@ cd telegram-to-yt-playlist
 pip install -r requirements.txt
 ```
 
-3. Create a `.env` file in the project root (see Configuration section)
+3. Create a `.env` file using `.env.example` as template
 
 ## Configuration
 
@@ -50,30 +60,20 @@ pip install -r requirements.txt
 
 ### YouTube Setup
 
-1. Set up Google Cloud Project:
+1. Create project in [Google Cloud Console](https://console.cloud.google.com)
+2. Enable YouTube Data API v3
+3. Create OAuth credentials and download as `telegram-2-yt-bot-creds.json`
+4. Create/select YouTube playlist and copy its ID
 
-    - Go to [Google Cloud Console](https://console.cloud.google.com/)
-    - Create a new project
-    - Enable YouTube Data API v3
+### AWS Deployment
 
-2. Create OAuth 2.0 credentials:
+1. Configure AWS credentials:
 
-    - Navigate to APIs & Services > Credentials
-    - Create OAuth client ID
-    - Choose Desktop Application
-    - Download the credentials JSON file
-    - Include `http://localhost:8080/` in the "Authorized redirect URIs"
-    - Add scope: `https://www.googleapis.com/auth/youtube.force-ssl`
-    - Rename it to `telegram-2-yt-bot-creds.json`
+```bash
+aws configure
+```
 
-3. Get your YouTube playlist ID:
-    - Create a playlist on YouTube if you haven't already
-    - Open the playlist
-    - Copy the ID from the URL (after `?list=`)
-
-### Environment Variables
-
-Create a `.env` file with the following:
+2. Deploy using provided script:
 
 ```env
 TELEGRAM_SESSION="your_session_string"
@@ -84,68 +84,47 @@ YOUTUBE_CREDENTIALS_PATH="telegram-2-yt-bot-creds.json"
 YOUTUBE_PLAYLIST_ID="your_playlist_id"
 ```
 
-## Deployment Options
+This will:
 
-### Local Deployment
+-   Create deployment package
+-   Set up AWS Lambda function
+-   Configure hourly EventBridge trigger
+-   Set up necessary IAM roles
 
-Run the main script:
+## Development
+
+### Local Testing
 
 ```bash
 python main.py
 ```
 
-The script will:
+### Code Style
 
-1. Connect to Telegram and YouTube
-2. Get the last 10 messages from the specified chat
-3. Extract YouTube links
-4. Add videos to your playlist
-5. Delete the processed messages
+-   Uses Ruff for linting and formatting
+-   Pre-commit hooks configured
+-   Run `ruff check .` to lint
+-   Run `ruff check --fix .` to auto-fix
 
-#### First Run
+### Error Handling
 
-On first run:
+-   All errors are logged to Telegram chat
+-   Duplicate videos are silently skipped
+-   Failed operations leave messages in chat
 
-1. The script will open your browser
-2. Log in to your Google account
-3. Grant the required permissions
-4. A token file will be saved for future use
+## Infrastructure
 
-### AWS Lambda Deployment
+-   AWS Lambda (Python 3.9 runtime)
+-   EventBridge for scheduling
+-   Terraform for infrastructure management
+-   Deployment script handles packaging and updates
 
-For automated execution, you can deploy the script to AWS Lambda:
+## Security Notes
 
-#### 1. Prepare the Deployment Package
-
-```bash
-mkdir package
-cd package
-pip install --target . -r ../requirements.txt
-cp ../{main.py,telegram_client.py,youtube_client.py,lambda_function.py} .
-cp ../token.pickle .
-cp ../telegram-2-yt-bot-creds.json .
-zip -r ../lambda_deployment.zip .
-```
-
-#### 2. Create Lambda Function
-
--   Runtime: Python 3.9
--   Handler: lambda_function.lambda_handler
--   Memory: 256 MB (minimum)
--   Timeout: 3 minutes
--   Environment variables:
-    -   API_ID
-    -   API_HASH
-    -   TELEGRAM_SESSION
-    -   CHAT_ID
-    -   YOUTUBE_PLAYLIST_ID
-
-#### 3. Deploy
-
--   Upload lambda_deployment.zip to Lambda
--   The lambda_deployment.zip must contain your token.pickle file in advance
--   Add EventBridge (CloudWatch Events) trigger
--   Set schedule (e.g., rate(1 hour))
+-   Never commit sensitive files (.env, credentials)
+-   Use terraform.tfvars for deployment configuration
+-   Keep your session string private
+-   Rotate API keys periodically
 
 ## Project Structure
 
