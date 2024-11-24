@@ -1,5 +1,6 @@
 import asyncio
 import os
+from typing import Optional
 
 from dotenv import load_dotenv
 
@@ -7,23 +8,53 @@ from telegram_client import TelegramYoutubeClient
 from youtube_client import YouTubeClient
 
 
-async def main():
+async def process_youtube_links(
+    telegram_client: TelegramYoutubeClient, youtube_client: YouTubeClient
+) -> None:
+    """Process YouTube links from Telegram messages"""
+    try:
+        # Get messages containing YouTube links
+        messages = await telegram_client.get_youtube_messages()
+
+        # Process each message
+        for message in messages:
+            try:
+                # Extract YouTube URL from message
+                text = message["text"]
+                if "youtube.com" in text or "youtu.be" in text:
+                    # Add video to playlist
+                    response = youtube_client.add_to_playlist(text)
+                    if response:
+                        await telegram_client.send_error_message(
+                            f"✅ Added video from {message['username']} to playlist"
+                        )
+
+            except Exception as e:
+                await telegram_client.send_error_message(
+                    f"❌ Failed to process message from {message['username']}: {e}"
+                )
+
+    except Exception as e:
+        await telegram_client.send_error_message(f"❌ Failed to process messages: {e}")
+
+
+async def main() -> None:
+    """Main function to run the bot"""
     # Load environment variables
     load_dotenv()
 
-    # Initialize Telegram client
+    # Initialize clients
     telegram_client = TelegramYoutubeClient(
-        api_id=int(os.getenv("API_ID")),
-        api_hash=os.getenv("API_HASH"),
-        session_string=os.getenv("TELEGRAM_SESSION"),
-        chat_id=int(os.getenv("CHAT_ID")),
+        api_id=int(os.getenv("API_ID", "0")),
+        api_hash=os.getenv("API_HASH", ""),
+        session_string=os.getenv("TELEGRAM_SESSION", ""),
+        chat_id=int(os.getenv("CHAT_ID", "0")),
     )
 
-    # Initialize YouTube client
     youtube_client = YouTubeClient(
-        credentials_path=os.getenv("YOUTUBE_CREDENTIALS_PATH"),
+        credentials_path=os.getenv("YOUTUBE_CREDENTIALS_PATH", ""),
         token_path="token.pickle",
-        playlist_id=os.getenv("YOUTUBE_PLAYLIST_ID"),
+        playlist_id=os.getenv("YOUTUBE_PLAYLIST_ID", ""),
     )
 
     try:
@@ -35,53 +66,41 @@ async def main():
 
         # Test YouTube connection
         if not youtube_client.test_connection():
-            raise Exception("Failed to connect to YouTube API")
-
-        print("\n1. Getting last 10 messages from Telegram...")
-        # Get messages first (store them before deletion)
-        messages = await telegram_client.client.get_messages(
-            telegram_client.chat_id, limit=10
-        )
-        print(f"Found {len(messages)} messages")
-
-        print("\n2. Extracting YouTube links...")
-        # Get YouTube messages from stored messages
-        youtube_messages = await telegram_client.get_youtube_messages(limit=10)
-
-        if not youtube_messages:
-            print("No YouTube links found in recent messages")
+            await telegram_client.send_error_message(
+                "❌ Failed to connect to YouTube API\n"
+                + "\n".join(youtube_client.error_log)
+            )
             return
 
-        print("\n3. Adding videos to YouTube playlist...")
-        # Process each YouTube message
-        for message in youtube_messages:
-            print(f"\nProcessing message from: {message['username']}")
-            print(f"Date: {message['date']}")
-            print(f"Message: {message['text']}")
+        # Process YouTube links
+        await process_youtube_links(telegram_client, youtube_client)
 
-            try:
-                # Add video to YouTube playlist
-                result = youtube_client.add_to_playlist(message["text"])
-                if result:
-                    print("✓ Successfully added to playlist")
-                else:
-                    print("⚠ Video was already in playlist or couldn't be added")
-            except Exception as e:
-                print(f"✗ Error adding video to playlist: {e}")
+        # Check for any accumulated errors
+        if youtube_client.error_log:
+            await telegram_client.send_error_message(
+                "⚠️ YouTube Client Errors:\n" + "\n".join(youtube_client.error_log)
+            )
 
-        print("\n4. Clearing Telegram chat...")
-        # Delete the messages
-        for i, message in enumerate(messages, 1):
-            await message.delete()
-            print(f"Deleted message {i}/{len(messages)}")
-
-        print("\nAll operations completed successfully!")
+        if telegram_client.error_log:
+            await telegram_client.send_error_message(
+                "⚠️ Telegram Client Errors:\n" + "\n".join(telegram_client.error_log)
+            )
 
     except Exception as e:
-        print(f"An error occurred: {e}")
+        await telegram_client.send_error_message(f"❌ Critical error: {e}")
+
     finally:
-        # Always disconnect Telegram client
+        # Always disconnect from Telegram
         await telegram_client.disconnect()
+
+
+def lambda_handler(event: dict, context: Optional[dict] = None) -> dict:
+    """AWS Lambda handler"""
+    try:
+        asyncio.run(main())
+        return {"statusCode": 200, "body": "Success"}
+    except Exception as e:
+        return {"statusCode": 500, "body": f"Error: {e!s}"}
 
 
 if __name__ == "__main__":
