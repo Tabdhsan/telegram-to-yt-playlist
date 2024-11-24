@@ -1,6 +1,8 @@
 import asyncio
-from dotenv import load_dotenv
 import os
+
+from dotenv import load_dotenv
+
 from telegram_client import TelegramYoutubeClient
 from youtube_client import YouTubeClient
 

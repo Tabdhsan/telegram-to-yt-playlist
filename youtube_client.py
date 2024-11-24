@@ -1,9 +1,10 @@
 import os
-from typing import Optional, Dict, Any, List
 import pickle
-from google_auth_oauthlib.flow import InstalledAppFlow
-from google.oauth2.credentials import Credentials
+from typing import Any, Optional
+
 from google.auth.transport.requests import Request
+from google.oauth2.credentials import Credentials
+from google_auth_oauthlib.flow import InstalledAppFlow
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
@@ -52,7 +53,9 @@ class YouTubeClient:
                 credentials = flow.run_local_server(
                     port=8080,
                     prompt="consent",
-                    success_message="The auth flow completed! You may close this window.",
+                    success_message=(
+                        "The auth flow completed! You may close this window."
+                    ),
                     open_browser=True,
                 )
 
@@ -86,11 +89,10 @@ class YouTubeClient:
             return url.split("/")[-1]
         return url.split("v=")[1].split("&")[0]
 
-    def _get_playlist_items(self) -> List[str]:
+    def _get_playlist_items(self) -> list[str]:
         """Get all video IDs currently in the playlist"""
         try:
             video_ids = []
-            # type: ignore
             request = self.youtube.playlistItems().list(
                 part="contentDetails", playlistId=self.playlist_id, maxResults=50
             )
@@ -116,7 +118,7 @@ class YouTubeClient:
         """Check if a video is already in the playlist"""
         return video_id in self._get_playlist_items()
 
-    def add_to_playlist(self, video_url: str) -> Optional[Dict[str, Any]]:
+    def add_to_playlist(self, video_url: str) -> Optional[dict[str, Any]]:
         """Add a video to the specified playlist if it's not already there"""
         try:
             video_id = self.extract_video_id(video_url)

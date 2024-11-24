@@ -1,6 +1,5 @@
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-from typing import List, Dict
 
 
 class TelegramYoutubeClient:
@@ -23,7 +22,7 @@ class TelegramYoutubeClient:
         if self.client:
             await self.client.disconnect()
 
-    async def get_youtube_messages(self, limit: int = 10) -> List[Dict]:
+    async def get_youtube_messages(self, limit: int = 10) -> list[dict]:
         """
         Get messages containing YouTube links
         Returns a list of dictionaries containing message details, sorted by date

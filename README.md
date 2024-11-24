@@ -189,3 +189,32 @@ The script handles various errors:
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Development
+
+### Code Style and Linting
+
+This project uses Ruff for linting and code formatting. Ruff is configured in `pyproject.toml`.
+
+To run the linter:
+
+```bash
+ruff check .
+```
+
+To automatically fix issues:
+
+```bash
+ruff check --fix .
+```
+
+Common linting rules enabled:
+
+-   E/W: pycodestyle errors and warnings
+-   F: Pyflakes
+-   I: isort
+-   N: naming conventions
+-   B: bugbear
+-   C4: comprehensions
+-   UP: pyupgrade
+-   RUF: Ruff-specific rules

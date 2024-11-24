@@ -1,4 +1,5 @@
 import asyncio
+
 from main import main
 
 
@@ -9,4 +10,4 @@ def lambda_handler(event, context):
 
         return {"statusCode": 200, "body": "Successfully processed messages"}
     except Exception as e:
-        return {"statusCode": 500, "body": f"Error: {str(e)}"}
+        return {"statusCode": 500, "body": f"Error: {e!s}"}
