@@ -25,7 +25,8 @@ async def process_youtube_links(
                 if "youtube.com" in text or "youtu.be" in text:
                     # Add video to playlist
                     response = youtube_client.add_to_playlist(text)
-                    # Add message to processed list even if it's a duplicate (response is None)
+                    # Add message to processed list
+                    # (even if it's a duplicate where response is None)
                     processed_messages.append(message)
                     if response:  # Only send success message for new additions
                         await telegram_client.send_error_message(

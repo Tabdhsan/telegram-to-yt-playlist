@@ -81,8 +81,9 @@ class YouTubeClient:
             request = self.youtube.channels().list(  # type: ignore[attr-defined]
                 part="snippet", mine=True
             )
-            response = request.execute()
-            channel_name = response["items"][0]["snippet"]["title"]
+            request.execute()
+            # response = request.execute()
+            # channel_name = response["items"][0]["snippet"]["title"]
             return True
         except Exception as e:
             self.error_log.append(f"Failed to connect to YouTube API: {e}")
