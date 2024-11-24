@@ -1,8 +1,6 @@
 from telethon import TelegramClient
 from telethon.sessions import StringSession
-import os
 from typing import List, Dict
-from datetime import datetime
 
 
 class TelegramYoutubeClient:
