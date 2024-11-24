@@ -1,0 +1,5 @@
+.env 
+telegram-2-yt-bot-creds.json 
+token.pickle 
+__pycache__
+session_name.session

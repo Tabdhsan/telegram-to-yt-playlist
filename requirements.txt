@@ -1,0 +1,6 @@
+python-telegram-bot
+telethon
+google-api-python-client
+google-auth-oauthlib
+google-auth-httplib2
+python-dotenv 
