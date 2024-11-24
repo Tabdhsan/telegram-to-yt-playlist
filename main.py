@@ -15,6 +15,7 @@ async def process_youtube_links(
     try:
         # Get messages containing YouTube links
         messages = await telegram_client.get_youtube_messages()
+        processed_messages = []
 
         # Process each message
         for message in messages:
@@ -24,7 +25,9 @@ async def process_youtube_links(
                 if "youtube.com" in text or "youtu.be" in text:
                     # Add video to playlist
                     response = youtube_client.add_to_playlist(text)
-                    if response:
+                    # Add message to processed list even if it's a duplicate (response is None)
+                    processed_messages.append(message)
+                    if response:  # Only send success message for new additions
                         await telegram_client.send_error_message(
                             f"✅ Added video from {message['username']} to playlist"
                         )
@@ -33,6 +36,10 @@ async def process_youtube_links(
                 await telegram_client.send_error_message(
                     f"❌ Failed to process message from {message['username']}: {e}"
                 )
+
+        # If we successfully processed any messages without errors, delete them
+        if processed_messages and not youtube_client.error_log:
+            await telegram_client.delete_messages(processed_messages)
 
     except Exception as e:
         await telegram_client.send_error_message(f"❌ Failed to process messages: {e}")

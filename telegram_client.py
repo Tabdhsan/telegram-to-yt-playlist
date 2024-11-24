@@ -95,3 +95,35 @@ class TelegramYoutubeClient:
         except Exception as e:
             # If we can't send the error message, we'll have to log it somewhere else
             self.error_log.append(f"Failed to send error message: {e}")
+
+    async def delete_messages(self, messages: list[dict]) -> None:
+        """Delete processed messages and previous error messages from the chat"""
+        try:
+            # Get recent messages
+            messages_to_delete = await self.client.get_messages(
+                self.chat_id,
+                limit=100,  # Get enough messages to find our targets
+            )
+
+            for msg in messages_to_delete:
+                if msg.text:  # Ensure message has text
+                    # Delete processed YouTube messages
+                    for processed_msg in messages:
+                        if (
+                            msg.text == processed_msg["text"]
+                            and msg.date == processed_msg["date"]
+                        ):
+                            await msg.delete()
+                            break
+
+                    # Also delete any previous bot error messages
+                    if (
+                        msg.text.startswith("🚨 Bot Error:")
+                        or msg.text.startswith("✅ Added video")
+                        or msg.text.startswith("⚠️ YouTube Client Errors:")
+                        or msg.text.startswith("⚠️ Telegram Client Errors:")
+                    ):
+                        await msg.delete()
+
+        except Exception as e:
+            self.error_log.append(f"Failed to delete messages: {e}")

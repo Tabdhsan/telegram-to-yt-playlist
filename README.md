@@ -170,6 +170,7 @@ The script handles various errors:
 -   Duplicate videos
 -   Connection issues
 -   Authentication failures
+-   The errors are logged to the Telegram chat
 
 ## Security Notes
 

@@ -131,7 +131,7 @@ class YouTubeClient:
 
             # Check if video is already in playlist
             if self.is_video_in_playlist(video_id):
-                self.error_log.append(f"Video already exists in playlist: {video_url}")
+                # Silently skip duplicates without logging or raising error
                 return None
 
             request = self.youtube.playlistItems().insert(  # type: ignore[attr-defined]
