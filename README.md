@@ -208,13 +208,25 @@ To automatically fix issues:
 ruff check --fix .
 ```
 
-Common linting rules enabled:
+Enabled rules:
 
--   E/W: pycodestyle errors and warnings
--   F: Pyflakes
--   I: isort
--   N: naming conventions
--   B: bugbear
--   C4: comprehensions
--   UP: pyupgrade
--   RUF: Ruff-specific rules
+-   `E`: pycodestyle errors
+-   `F`: Pyflakes
+-   `I`: isort
+-   `N`: naming conventions
+-   `W`: pycodestyle warnings
+-   `B`: bugbear
+-   `C4`: comprehensions
+-   `UP`: pyupgrade
+-   `RUF`: Ruff-specific rules
+
+Ignored rules:
+
+-   `D100`: Missing docstring in public module
+-   `D104`: Missing docstring in public package
+
+The project uses:
+
+-   Line length: 88 characters (same as Black)
+-   Python target version: 3.9
+-   McCabe complexity: maximum of 10
