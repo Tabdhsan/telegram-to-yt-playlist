@@ -34,7 +34,7 @@ target-version = "py39"
 select = ["E", "F", "I", "N", "W", "B", "C4", "UP", "RUF"]
 ignore = ["D100", "D104"]
 extend-select = ["UP"]
-fixable = ["A", "B", "C", "D", "E", "F", "I", "N", "Q", "S", "T", "W", 
+fixable = ["A", "B", "C", "D", "E", "F", "I", "N", "Q", "S", "T", "W",
            "ANN", "ARG", "BLE", "COM", "DJ", "DTZ", "EM", "ERA", "EXE",
            "FBT", "ICN", "INP", "ISC", "NPY", "PD", "PGH", "PIE", "PL",
            "PT", "PTH", "PYI", "RET", "RSE", "RUF", "SIM", "SLF", "TID",
@@ -48,4 +48,4 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 max-complexity = 10
 
 [tool.ruff.isort]
-known-first-party = [] 
+known-first-party = []
