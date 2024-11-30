@@ -47,6 +47,7 @@ wheels/
 *.tfstate.*
 .terraform.lock.hcl
 terraform.tfvars
+.env
 
 # Deployment
 package/
