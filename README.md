@@ -65,7 +65,7 @@ pip install -r requirements.txt
 3. Create OAuth credentials and download as `telegram-2-yt-bot-creds.json`
 4. Create/select YouTube playlist and copy its ID
 
-### AWS Deployment
+### AWS Deployment (if you want to deploy to AWS - Main Branch Only)
 
 1. Configure AWS credentials:
 
@@ -118,6 +118,22 @@ python main.py
 -   EventBridge for scheduling
 -   Terraform for infrastructure management
 -   Deployment script handles packaging and updates
+
+### Docker Deployment
+
+1. Run deploy-docker.sh to build and run the docker container
+
+```bash
+./deploy-docker.sh
+```
+
+2. Check Portainer to see the container running
+
+3. Check the logs to see the bot running
+
+```bash
+docker logs -f telegram-youtube-bot
+```
 
 ## Security Notes
 
