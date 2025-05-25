@@ -49,7 +49,7 @@ pip install -r requirements.txt
 
 2. Generate a session string:
 
-    - Run `python get_session.py`
+    - Run `python get_telegram_session.py`
     - Enter your phone number and the verification code
     - Save the generated session string
 
