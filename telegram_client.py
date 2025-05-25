@@ -48,10 +48,8 @@ class TelegramYoutubeClient:
                 # Here you can call your YouTubeClient logic to add video
                 # e.g. await self.process_youtube_link(text)
 
-                # For now, just send a confirmation message back to chat
-                await self.client.send_message(
-                    self.chat_id, f"✅ Received and processing YouTube link from @{username}"
-                )
+                # Delete the processed message instead of sending confirmation
+                await message.delete()
 
         except Exception as e:
             error_msg = f"Error in new_message_handler: {e}"
