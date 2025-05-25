@@ -12,128 +12,106 @@ from googleapiclient.errors import HttpError
 class YouTubeClient:
     """Client for interacting with YouTube API"""
 
+    SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
+
     def __init__(self, credentials_path: str, token_path: str, playlist_id: str):
         self.credentials_path = credentials_path
         self.token_path = token_path
         self.playlist_id = playlist_id
         self.youtube: Optional[Resource] = None
-        self.SCOPES = ["https://www.googleapis.com/auth/youtube.force-ssl"]
         self.error_log = []
 
     def authenticate(self) -> None:
         """Authenticate with YouTube API using OAuth2"""
-        credentials = self._get_credentials()
+        credentials = self._load_or_refresh_credentials()
         self.youtube = cast(Resource, build("youtube", "v3", credentials=credentials))
 
-    def _get_credentials(self) -> Credentials:
-        """Get valid user credentials from storage or generate new ones"""
-        credentials = None
-        error_messages = []
+    def _load_or_refresh_credentials(self) -> Credentials:
+        """Load credentials from file, refresh if expired, or run full OAuth flow"""
+        credentials = self._load_credentials_from_file()
 
-        # Load existing credentials
-        if os.path.exists(self.token_path):
-            try:
-                with open(self.token_path, "rb") as token:
-                    credentials = pickle.load(token)
-            except (pickle.UnpicklingError, EOFError) as e:
-                error_messages.append(f"Error loading credentials: {e}")
-                credentials = None
-
-        # Refresh expired credentials
         if credentials and credentials.expired and credentials.refresh_token:
             try:
                 credentials.refresh(Request())
             except Exception as e:
-                error_messages.append(f"Error refreshing credentials: {e}")
+                self.error_log.append(f"Error refreshing credentials: {e}")
                 credentials = None
 
-        # Generate new credentials if needed
         if not credentials or not credentials.valid:
-            flow = InstalledAppFlow.from_client_secrets_file(
-                self.credentials_path, self.SCOPES
-            )
-            try:
-                credentials = flow.run_local_server(
-                    port=8080,
-                    prompt="consent",
-                    success_message=(
-                        "The auth flow completed! You may close this window."
-                    ),
-                    open_browser=True,
-                )
-
-                # Save the credentials for future use
-                with open(self.token_path, "wb") as token:
-                    pickle.dump(credentials, token)
-
-            except Exception as e:
-                error_messages.append(f"Error during authorization: {e}")
-                raise
-
-        if error_messages:
-            self.error_log = error_messages
+            credentials = self._run_auth_flow()
 
         return credentials
 
-    def test_connection(self) -> bool:
-        """Test if the YouTube API connection is working"""
+    def _load_credentials_from_file(self) -> Optional[Credentials]:
+        if os.path.exists(self.token_path):
+            try:
+                with open(self.token_path, "rb") as token:
+                    return pickle.load(token)
+            except (pickle.UnpicklingError, EOFError) as e:
+                self.error_log.append(f"Error loading credentials: {e}")
+        return None
+
+    def _run_auth_flow(self) -> Credentials:
         try:
-            request = self.youtube.channels().list(  # type: ignore[attr-defined]
-                part="snippet", mine=True
+            flow = InstalledAppFlow.from_client_secrets_file(
+                self.credentials_path, self.SCOPES
             )
-            request.execute()
-            # response = request.execute()
-            # channel_name = response["items"][0]["snippet"]["title"]
+            credentials = flow.run_local_server(
+                port=8080,
+                prompt="consent",
+                success_message="Auth complete, you can close this window.",
+                open_browser=True,
+            )
+            with open(self.token_path, "wb") as token:
+                pickle.dump(credentials, token)
+            return credentials
+        except Exception as e:
+            self.error_log.append(f"Authorization error: {e}")
+            raise
+
+    def test_connection(self) -> bool:
+        """Check API connectivity"""
+        try:
+            self.youtube.channels().list(part="snippet", mine=True).execute()  # type: ignore[attr-defined]
             return True
         except Exception as e:
             self.error_log.append(f"Failed to connect to YouTube API: {e}")
             return False
 
     def extract_video_id(self, url: str) -> str:
-        """Extract video ID from YouTube URL"""
+        """Extract the video ID from a YouTube URL"""
         if "youtu.be" in url:
             return url.split("/")[-1]
         return url.split("v=")[1].split("&")[0]
 
     def _get_playlist_items(self) -> list[str]:
-        """Get all video IDs currently in the playlist"""
+        """Retrieve all video IDs currently in the playlist"""
+        video_ids = []
         try:
-            video_ids = []
             request = self.youtube.playlistItems().list(  # type: ignore[attr-defined]
                 part="contentDetails", playlistId=self.playlist_id, maxResults=50
             )
-
             while request:
                 response = request.execute()
                 video_ids.extend(
                     item["contentDetails"]["videoId"]
                     for item in response.get("items", [])
                 )
-
-                # Get next page of results
-                request = self.youtube.playlistItems().list_next(  # type: ignore[attr-defined]
-                    request, response
-                )
-
-            return video_ids
-
+                request = self.youtube.playlistItems().list_next(request, response)  # type: ignore[attr-defined]
         except Exception as e:
-            self.error_log.append(f"Error getting playlist items: {e}")
-            return []
+            self.error_log.append(f"Error fetching playlist items: {e}")
+        return video_ids
 
     def is_video_in_playlist(self, video_id: str) -> bool:
         """Check if a video is already in the playlist"""
         return video_id in self._get_playlist_items()
 
     def add_to_playlist(self, video_url: str) -> Optional[dict[str, Any]]:
-        """Add a video to the specified playlist if it's not already there"""
+        """Add a video to the playlist if not already present"""
         try:
             video_id = self.extract_video_id(video_url)
-
-            # Check if video is already in playlist
             if self.is_video_in_playlist(video_id):
-                # Silently skip duplicates without logging or raising error
-                return None
+                return None  # Already present
 
             request = self.youtube.playlistItems().insert(  # type: ignore[attr-defined]
                 part="snippet",
@@ -144,14 +122,42 @@ class YouTubeClient:
                     }
                 },
             )
-            response = request.execute()
-            return response
+            return request.execute()
 
         except HttpError as e:
-            self.error_log.append(
-                f"An HTTP error {e.resp.status} occurred: {e.content}"
-            )
+            self.error_log.append(f"HTTP error {e.resp.status}: {e.content}")
             raise
         except Exception as e:
-            self.error_log.append(f"An error occurred: {e}")
+            self.error_log.append(f"General error adding to playlist: {e}")
             raise
+
+
+if __name__ == "__main__":
+    import os
+    from dotenv import load_dotenv
+    load_dotenv()
+
+    credentials_path = os.environ["YOUTUBE_CREDENTIALS_PATH"]
+    token_path = os.environ["YOUTUBE_TOKEN_PATH"]
+    playlist_id = os.environ["YOUTUBE_PLAYLIST_ID"]
+    test_video_url = "https://youtu.be/dQw4w9WgXcQ" # Example
+
+    client = YouTubeClient(credentials_path, token_path, playlist_id)
+    client.authenticate()
+
+    print("✅ Authenticated with YouTube")
+
+    print("🔍 Testing connection...")
+    if client.test_connection():
+        print("✅ Connection successful!")
+    else:
+        print("❌ Connection failed.")
+        print(client.error_log)
+
+    print(f"➕ Attempting to add video: {test_video_url}")
+    result = client.add_to_playlist(test_video_url)
+
+    if result:
+        print("✅ Video added to playlist.")
+    else:
+        print("ℹ️ Video was already in playlist or skipped.")

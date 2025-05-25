@@ -1,114 +1,55 @@
-import asyncio
 import os
-from typing import Optional
-
+import asyncio
 from dotenv import load_dotenv
-
-from telegram_client import TelegramYoutubeClient
+from telegram_client import TelegramToYouTubeBot
 from youtube_client import YouTubeClient
 
 
-async def process_youtube_links(
-    telegram_client: TelegramYoutubeClient, youtube_client: YouTubeClient
-) -> None:
-    """Process YouTube links from Telegram messages"""
-    try:
-        # Get messages containing YouTube links
-        messages = await telegram_client.get_youtube_messages()
-        processed_messages = []
-
-        # Process each message
-        for message in messages:
-            try:
-                # Extract YouTube URL from message
-                text = message["text"]
-                if "youtube.com" in text or "youtu.be" in text:
-                    # Add video to playlist
-                    response = youtube_client.add_to_playlist(text)
-                    # Add message to processed list
-                    # (even if it's a duplicate where response is None)
-                    processed_messages.append(message)
-                    if response:  # Only send success message for new additions
-                        await telegram_client.send_error_message(
-                            f"✅ Added video from {message['username']} to playlist"
-                        )
-
-            except Exception as e:
-                await telegram_client.send_error_message(
-                    f"❌ Failed to process message from {message['username']}: {e}"
-                )
-
-        # If we successfully processed any messages without errors, delete them
-        if processed_messages and not youtube_client.error_log:
-            await telegram_client.delete_messages(processed_messages)
-
-    except Exception as e:
-        await telegram_client.send_error_message(f"❌ Failed to process messages: {e}")
-
-
-async def main() -> None:
-    """Main function to run the bot"""
+async def main():
+    """Main entry point for the Telegram to YouTube Bot"""
+    print("🤖 Telegram to YouTube Playlist Bot")
+    print("=" * 40)
+    
     # Load environment variables
     load_dotenv()
-
-    # Initialize clients
-    telegram_client = TelegramYoutubeClient(
-        api_id=int(os.getenv("API_ID", "0")),
-        api_hash=os.getenv("API_HASH", ""),
-        session_string=os.getenv("TELEGRAM_SESSION", ""),
-        chat_id=int(os.getenv("CHAT_ID", "0")),
-    )
-
-    youtube_client = YouTubeClient(
-        credentials_path=os.getenv("YOUTUBE_CREDENTIALS_PATH", ""),
-        token_path="token.pickle",
-        playlist_id=os.getenv("YOUTUBE_PLAYLIST_ID", ""),
-    )
-
+    
     try:
-        # Connect to Telegram
-        await telegram_client.connect()
-
-        # Authenticate with YouTube
+        # Create and authenticate YouTube client
+        print("🔐 Authenticating with YouTube...")
+        youtube_client = YouTubeClient(
+            credentials_path=os.environ["YOUTUBE_CREDENTIALS_PATH"],
+            token_path=os.environ["YOUTUBE_TOKEN_PATH"],
+            playlist_id=os.environ["YOUTUBE_PLAYLIST_ID"]
+        )
         youtube_client.authenticate()
-
+        
         # Test YouTube connection
-        if not youtube_client.test_connection():
-            await telegram_client.send_error_message(
-                "❌ Failed to connect to YouTube API\n"
-                + "\n".join(youtube_client.error_log)
-            )
+        if youtube_client.test_connection():
+            print("✅ YouTube API connection verified")
+        else:
+            print("❌ YouTube API connection failed")
+            print("Errors:", youtube_client.error_log)
             return
-
-        # Process YouTube links
-        await process_youtube_links(telegram_client, youtube_client)
-
-        # Check for any accumulated errors
-        if youtube_client.error_log:
-            await telegram_client.send_error_message(
-                "⚠️ YouTube Client Errors:\n" + "\n".join(youtube_client.error_log)
-            )
-
-        if telegram_client.error_log:
-            await telegram_client.send_error_message(
-                "⚠️ Telegram Client Errors:\n" + "\n".join(telegram_client.error_log)
-            )
-
+        
+        # Create Telegram bot with YouTube integration
+        print("🚀 Starting Telegram bot...")
+        bot = TelegramToYouTubeBot(
+            api_id=int(os.environ["TELEGRAM_API_ID"]),
+            api_hash=os.environ["TELEGRAM_API_HASH"],
+            session_string=os.environ["TELEGRAM_SESSION_STRING"],
+            chat_id=int(os.environ["TELEGRAM_CHAT_ID"]),
+            youtube_client=youtube_client
+        )
+        
+        # Start the bot (runs indefinitely)
+        await bot.start()
+        
+    except KeyboardInterrupt:
+        print("\n🛑 Received interrupt signal - stopping bot...")
     except Exception as e:
-        await telegram_client.send_error_message(f"❌ Critical error: {e}")
-
+        print(f"❌ Bot crashed: {e}")
     finally:
-        # Always disconnect from Telegram
-        await telegram_client.disconnect()
-
-
-def lambda_handler(event: dict, context: Optional[dict] = None) -> dict:
-    """AWS Lambda handler"""
-    try:
-        asyncio.run(main())
-        return {"statusCode": 200, "body": "Success"}
-    except Exception as e:
-        return {"statusCode": 500, "body": f"Error: {e!s}"}
+        print("✅ Bot stopped")
 
 
 if __name__ == "__main__":
