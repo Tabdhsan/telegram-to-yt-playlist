@@ -14,14 +14,43 @@ async def main():
     load_dotenv()
     
     try:
-        # Create and authenticate YouTube client
+        # Get owner chat ID (optional, defaults to main chat)
+        owner_chat_id = os.environ.get("OWNER_CHAT_ID")
+        if owner_chat_id:
+            owner_chat_id = int(owner_chat_id)
+        else:
+            owner_chat_id = int(os.environ["TELEGRAM_CHAT_ID"])
+        
+        # Create Telegram bot first (we need the client for YouTube auth)
+        print("🚀 Initializing Telegram bot...")
+        bot = TelegramToYouTubeBot(
+            api_id=int(os.environ["TELEGRAM_API_ID"]),
+            api_hash=os.environ["TELEGRAM_API_HASH"],
+            session_string=os.environ["TELEGRAM_SESSION_STRING"],
+            chat_id=int(os.environ["TELEGRAM_CHAT_ID"]),
+            youtube_client=None,  # Will be set after YouTube client creation
+            owner_chat_id=owner_chat_id
+        )
+        
+        # Start Telegram client for authentication purposes
+        await bot.client.start()
+        print("✅ Telegram client ready for authentication")
+        
+        # Create and authenticate YouTube client with Telegram integration
         print("🔐 Authenticating with YouTube...")
         youtube_client = YouTubeClient(
             credentials_path=os.environ["YOUTUBE_CREDENTIALS_PATH"],
             token_path=os.environ["YOUTUBE_TOKEN_PATH"],
-            playlist_id=os.environ["YOUTUBE_PLAYLIST_ID"]
+            playlist_id=os.environ["YOUTUBE_PLAYLIST_ID"],
+            telegram_client=bot.client,
+            owner_chat_id=owner_chat_id
         )
-        youtube_client.authenticate()
+        
+        # Authenticate asynchronously
+        await youtube_client.authenticate_async()
+        
+        # Set the YouTube client in the bot
+        bot.youtube_client = youtube_client
         
         # Test YouTube connection
         if youtube_client.test_connection():
@@ -31,18 +60,13 @@ async def main():
             print("Errors:", youtube_client.error_log)
             return
         
-        # Create Telegram bot with YouTube integration
-        print("🚀 Starting Telegram bot...")
-        bot = TelegramToYouTubeBot(
-            api_id=int(os.environ["TELEGRAM_API_ID"]),
-            api_hash=os.environ["TELEGRAM_API_HASH"],
-            session_string=os.environ["TELEGRAM_SESSION_STRING"],
-            chat_id=int(os.environ["TELEGRAM_CHAT_ID"]),
-            youtube_client=youtube_client
-        )
+        # Set up event handlers and start listening
+        print("🎧 Setting up message handlers...")
+        await bot.setup_handlers()
         
-        # Start the bot (runs indefinitely)
-        await bot.start()
+        # Keep the bot running
+        print("✅ Bot is now running and listening for YouTube links!")
+        await bot.client.run_until_disconnected()
         
     except KeyboardInterrupt:
         print("\n🛑 Received interrupt signal - stopping bot...")

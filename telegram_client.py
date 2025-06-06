@@ -11,12 +11,13 @@ class TelegramToYouTubeBot:
     Listens to a Telegram chat and automatically adds YouTube links to a playlist.
     """
 
-    def __init__(self, api_id: int, api_hash: str, session_string: str, chat_id: int, youtube_client: YouTubeClient):
+    def __init__(self, api_id: int, api_hash: str, session_string: str, chat_id: int, youtube_client: YouTubeClient, owner_chat_id: int = None):
         # Telegram setup
         self.api_id = api_id
         self.api_hash = api_hash
         self.session_string = session_string
         self.chat_id = chat_id
+        self.owner_chat_id = owner_chat_id or chat_id  # Default to main chat if not specified
         self.client = TelegramClient(StringSession(session_string), api_id, api_hash)
         
         # YouTube integration
@@ -25,6 +26,24 @@ class TelegramToYouTubeBot:
         # Error logging
         self.error_log = []
 
+    async def setup_handlers(self):
+        """Set up event handlers for the bot"""
+        # Add event handler for new messages in the monitored chat
+        self.client.add_event_handler(self.handle_new_message, events.NewMessage(chats=self.chat_id))
+        
+        # Add event handler for owner messages (for auth codes)
+        if self.owner_chat_id != self.chat_id:
+            self.client.add_event_handler(self.handle_owner_message, events.NewMessage(chats=self.owner_chat_id))
+        else:
+            # If owner and monitored chat are the same, use a single handler
+            self.client.add_event_handler(self.handle_combined_message, events.NewMessage(chats=self.chat_id))
+            # Remove the previous handler to avoid duplication
+            self.client.remove_event_handler(self.handle_new_message)
+
+        print(f"🎧 Listening for YouTube links in chat: {self.chat_id}")
+        if self.owner_chat_id != self.chat_id:
+            print(f"🔐 Listening for auth codes from owner: {self.owner_chat_id}")
+
     async def start(self):
         """Start the bot - authenticate and listen for messages"""
         try:
@@ -32,16 +51,57 @@ class TelegramToYouTubeBot:
             await self.client.start()
             print("✅ Telegram client started")
 
-            # Add event handler for new messages in the chat
-            self.client.add_event_handler(self.handle_new_message, events.NewMessage(chats=self.chat_id))
+            # Set up event handlers
+            await self.setup_handlers()
 
             # Keep the client running until explicitly stopped
-            print(f"🎧 Listening for YouTube links in chat: {self.chat_id}")
             await self.client.run_until_disconnected()
 
         except Exception as e:
             self.error_log.append(f"Failed to start Telegram client: {e}")
             raise
+
+    async def handle_combined_message(self, event: events.NewMessage.Event):
+        """Handle messages when owner and monitored chat are the same"""
+        # First check if it's an auth code
+        if await self.handle_auth_code_message(event):
+            return
+        
+        # Otherwise handle as regular YouTube link message
+        await self.handle_new_message(event)
+
+    async def handle_owner_message(self, event: events.NewMessage.Event):
+        """Handle messages from owner (for auth codes)"""
+        await self.handle_auth_code_message(event)
+
+    async def handle_auth_code_message(self, event: events.NewMessage.Event) -> bool:
+        """Handle potential authorization code messages"""
+        try:
+            message = event.message
+            text = message.text or ""
+            
+            # Check if this looks like an authorization code (alphanumeric, reasonable length)
+            # YouTube auth codes are typically 4/... format or long alphanumeric strings
+            if (text.startswith('4/') or (len(text) > 20 and text.replace('-', '').replace('_', '').isalnum())):
+                print(f"🔑 Received potential auth code: {text[:10]}...")
+                self.youtube_client.handle_auth_code(text)
+                
+                # Delete the auth code message for security
+                try:
+                    await message.delete()
+                    print("🗑️ Auth code message deleted for security")
+                except Exception as e:
+                    print(f"⚠️ Could not delete auth code message: {e}")
+                
+                return True
+            
+            return False
+            
+        except Exception as e:
+            error_msg = f"Error handling auth code message: {e}"
+            self.error_log.append(error_msg)
+            print(f"❌ {error_msg}")
+            return False
 
     async def handle_new_message(self, event: events.NewMessage.Event):
         """Handle new incoming messages - process YouTube links"""
@@ -77,10 +137,14 @@ class TelegramToYouTubeBot:
     def extract_youtube_urls(self, text: str) -> list[str]:
         """Extract all YouTube URLs from text using regex"""
         patterns = [
-            r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+(?:&[\w=&]*)?',
-            r'https?://youtu\.be/[\w-]+(?:\?[\w=&]*)?',
-            r'https?://(?:www\.)?youtube\.com/embed/[\w-]+(?:\?[\w=&]*)?',
-            r'https?://(?:www\.)?youtube\.com/v/[\w-]+(?:\?[\w=&]*)?'
+            # Standard and mobile YouTube watch URLs with any parameters
+            r'https?://(?:www\.|m\.)?youtube\.com/watch\?[^\s]+',
+            # Short youtu.be URLs with any parameters  
+            r'https?://youtu\.be/[\w-]+(?:\?[^\s]*)?',
+            # Embed URLs with any parameters
+            r'https?://(?:www\.|m\.)?youtube\.com/embed/[\w-]+(?:\?[^\s]*)?',
+            # Old /v/ format with any parameters
+            r'https?://(?:www\.|m\.)?youtube\.com/v/[\w-]+(?:\?[^\s]*)?'
         ]
         
         urls = []
