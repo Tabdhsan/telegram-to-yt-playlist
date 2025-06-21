@@ -241,6 +241,13 @@ class YouTubeClient:
             if match:
                 return match.group(1)
         
+        # Handle YouTube Shorts URLs
+        if "/shorts/" in url:
+            # Extract ID from /shorts/ path
+            match = re.search(r'/shorts/([a-zA-Z0-9_-]+)', url)
+            if match:
+                return match.group(1)
+        
         # Handle all youtube.com formats (www, m, or no subdomain)
         # Look for v= parameter in any position
         match = re.search(r'[?&]v=([a-zA-Z0-9_-]+)', url)
@@ -277,7 +284,7 @@ class YouTubeClient:
         """Check if a video is already in the playlist"""
         return video_id in self._get_playlist_items()
 
-    def add_to_playlist(self, video_url: str) -> Optional[dict[str, Any]]:
+    def add_to_playlist(self, video_url: str, retry_count: int = 0) -> Optional[dict[str, Any]]:
         """Add a video to the playlist if not already present"""
         try:
             video_id = self.extract_video_id(video_url)
@@ -296,7 +303,28 @@ class YouTubeClient:
             return request.execute()
 
         except HttpError as e:
-            self.error_log.append(f"HTTP error {e.resp.status}: {e.content}")
+            error_content = e.content.decode() if hasattr(e.content, 'decode') else str(e.content)
+            
+            # Check if this is an authentication error
+            if (e.resp.status == 401 or 
+                "invalid_grant" in error_content.lower() or 
+                "token has been expired" in error_content.lower() or
+                "unauthorized" in error_content.lower()):
+                
+                if retry_count < 1:  # Only retry once
+                    print("🔄 Authentication expired, attempting to re-authenticate...")
+                    try:
+                        self.authenticate()  # Re-authenticate
+                        print("✅ Re-authentication successful, retrying...")
+                        return self.add_to_playlist(video_url, retry_count + 1)  # Retry once
+                    except Exception as auth_error:
+                        print(f"❌ Re-authentication failed: {auth_error}")
+                        self.error_log.append(f"Re-authentication failed: {auth_error}")
+                        raise
+                else:
+                    print("❌ Already retried authentication, giving up")
+            
+            self.error_log.append(f"HTTP error {e.resp.status}: {error_content}")
             raise
         except Exception as e:
             self.error_log.append(f"General error adding to playlist: {e}")
@@ -311,7 +339,7 @@ if __name__ == "__main__":
     credentials_path = os.environ["YOUTUBE_CREDENTIALS_PATH"]
     token_path = os.environ["YOUTUBE_TOKEN_PATH"]
     playlist_id = os.environ["YOUTUBE_PLAYLIST_ID"]
-    test_video_url = "https://youtu.be/dQw4w9WgXcQ" # Example
+    test_video_url = "https://www.youtube.com/shorts/2XgY-rNaojU" # Example Short
 
     client = YouTubeClient(credentials_path, token_path, playlist_id)
     client.authenticate()

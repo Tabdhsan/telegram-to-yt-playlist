@@ -118,16 +118,27 @@ class TelegramToYouTubeBot:
                 
                 print(f"📨 New message from @{username} with {len(youtube_urls)} YouTube link(s)")
                 
-                # Process each YouTube URL
-                for url in youtube_urls:
-                    await self.process_youtube_url(url, username)
+                # Process each YouTube URL and track success
+                successful_urls = 0
+                failed_urls = 0
                 
-                # Delete the processed message
-                try:
-                    await message.delete()
-                    print("🗑️ Message deleted")
-                except Exception as e:
-                    print(f"⚠️ Could not delete message: {e}")
+                for url in youtube_urls:
+                    success = await self.process_youtube_url(url, username)
+                    if success:
+                        successful_urls += 1
+                    else:
+                        failed_urls += 1
+                
+                # Only delete the message if ALL URLs were processed successfully
+                if failed_urls == 0:
+                    try:
+                        await message.delete()
+                        print("🗑️ Message deleted - all URLs processed successfully")
+                    except Exception as e:
+                        print(f"⚠️ Could not delete message: {e}")
+                else:
+                    print(f"⚠️ Keeping message - {failed_urls} URL(s) failed, {successful_urls} succeeded")
+                    print("   └─ User can retry the failed URLs later")
 
         except Exception as e:
             error_msg = f"Error handling message: {e}"
@@ -137,14 +148,11 @@ class TelegramToYouTubeBot:
     def extract_youtube_urls(self, text: str) -> list[str]:
         """Extract all YouTube URLs from text using regex"""
         patterns = [
-            # Standard and mobile YouTube watch URLs with any parameters
-            r'https?://(?:www\.|m\.)?youtube\.com/watch\?[^\s]+',
-            # Short youtu.be URLs with any parameters  
-            r'https?://youtu\.be/[\w-]+(?:\?[^\s]*)?',
-            # Embed URLs with any parameters
-            r'https?://(?:www\.|m\.)?youtube\.com/embed/[\w-]+(?:\?[^\s]*)?',
-            # Old /v/ format with any parameters
-            r'https?://(?:www\.|m\.)?youtube\.com/v/[\w-]+(?:\?[^\s]*)?'
+            r'https?://(?:www\.)?youtube\.com/watch\?v=[\w-]+(?:&[\w=&]*)?',
+            r'https?://youtu\.be/[\w-]+(?:\?[\w=&]*)?',
+            r'https?://(?:www\.)?youtube\.com/embed/[\w-]+(?:\?[\w=&]*)?',
+            r'https?://(?:www\.)?youtube\.com/v/[\w-]+(?:\?[\w=&]*)?',
+            r'https?://(?:www\.)?youtube\.com/shorts/[\w-]+(?:\?[\w=&]*)?'
         ]
         
         urls = []
@@ -153,8 +161,8 @@ class TelegramToYouTubeBot:
         
         return list(set(urls))  # Remove duplicates
 
-    async def process_youtube_url(self, url: str, username: str):
-        """Process a single YouTube URL - add to playlist"""
+    async def process_youtube_url(self, url: str, username: str) -> bool:
+        """Process a single YouTube URL - add to playlist. Returns True if successful."""
         try:
             print(f"🎵 Processing: {url}")
             
@@ -166,13 +174,16 @@ class TelegramToYouTubeBot:
             if result:
                 print(f"✅ Added to playlist: {url}")
                 print(f"   └─ Requested by: @{username}")
+                return True
             else:
                 print(f"ℹ️ Video already in playlist: {url}")
                 print(f"   └─ Requested by: @{username}")
+                return True  # Already in playlist counts as success
                 
         except Exception as e:
             print(f"❌ Failed to add {url} to playlist: {e}")
             print(f"   └─ Requested by: @{username}")
+            return False
 
     async def stop(self):
         """Stop the bot gracefully"""
